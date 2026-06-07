@@ -53,3 +53,64 @@ def execute_python_code(code):
 
     finally:
         sys.stdout = old_stdout
+
+def analyze_error(code, tb):
+
+    client = OpenAI(
+        api_key=os.environ["eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IjIzZjIwMDM3MjRAZHMuc3R1ZHkuaWl0bS5hYy5pbiIsImlhdCI6MTc4MDgyMTYwMSwiaXNzIjoiaHR0cHM6Ly9haXBpcGUub3JnIiwiYXVkIjoiYWlwaXBlLWFwaSIsImV4cCI6MTc4MTQyNjQwMX0.NK-BpreUs_oS-4VwHWbwrR0yBT656HYmq-GUhLF1fZ0"],
+        base_url="https://aipipe.org/openai/v1"
+    )
+
+    prompt = f"""
+Find the line numbers causing the error.
+
+CODE:
+{code}
+
+TRACEBACK:
+{tb}
+
+Return JSON only.
+
+Example:
+{{"error_lines":[3]}}
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4.1-nano",
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    data = json.loads(
+        response.choices[0].message.content
+    )
+
+    return data["error_lines"]
+    
+@app.post("/code-interpreter")
+def code_interpreter(req: CodeRequest):
+
+    result = execute_python_code(req.code)
+
+    if result["success"]:
+
+        return {
+            "error": [],
+            "result": result["output"]
+        }
+
+    lines = analyze_error(
+        req.code,
+        result["output"]
+    )
+
+    return {
+        "error": lines,
+        "result": result["output"]
+    }
